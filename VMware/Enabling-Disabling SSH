@@ -1,0 +1,36 @@
+Enabling SSH
+
+Get-VMHost | Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+1
+
+Get-VMHost | Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+If you want to filter which hosts you want to enable SSH on, specify them on the Get-VMHost:
+
+Get-VMHost -Name MyHosts*| Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+1
+Get-VMHost -Name MyHosts*| Foreach {Start-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+Check which hosts still have SSH enabled.
+
+Get-VMHost | Get-VMHostService | Where { $_.Key -eq "TSM-SSH" } |select VMHost, Label, Running
+1
+Get-VMHost | Get-VMHostService | Where { $_.Key -eq "TSM-SSH" } |select VMHost, Label, Running
+By the way, if you were wondering what TSM stands for, it is “Technical Support Mode”.
+
+Disabling SSH
+If you want to disable SSH on all hosts still running SSH, you can use the following:
+
+Get-VMHost | Foreach {Stop-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+1
+Get-VMHost | Foreach {Stop-VMHostService -HostService ($_ | Get-VMHostService | Where { $_.Key -eq "TSM-SSH"} )}
+Shorter/faster
+The oneliners I used above are retrieving the objects for hosts with Get-VMHost. After that they get processed by the Get-VMHostservice. The oneliner can be simplified by using the host directly in the Get-VMHostService cmdlet. It seems a little bit faster.
+
+Get-VMHostService -VMHost "esx01.local" | Where-Object {$_.Key -eq "TSM-SSH"}
+1
+Get-VMHostService -VMHost "esx01.local" | Where-Object {$_.Key -eq "TSM-SSH"}
+The reason that I’m still using the first method is that I really don’t know. I want to say that it is more logical than the latter, but it isn’t. “Getting the object for VMHost and then looping through it, feeding it through the Stop-VMHostService with parameters from Get-VMHostService to stop them” isn’t more logical than “Get the services from host esx01.local, select the SSH service and stop it”.
+
+PowerShell
+Get-VMHostService -VMHost * | Where-Object {$_.Key -eq "TSM-SSH" } | Stop-VMHostService
+1
+Get-VMHostService -VMHost * | Where-Object {$_.Key -eq "TSM-SSH" } | Stop-VMHostService

@@ -1,0 +1,9 @@
+$vmhost = get-vmhost -Location ADCCZRHMGT001
+
+Foreach ($CMPHosts in $vmhost)
+{
+Add-VmHostNtpServer -NtpServer 10.10.10.1, 10.10.10.2 -VMHost $CMPHosts | out-Null
+Get-VMHostService -VMhost $CMPHosts | where { $_.Key -eq “ntpd” } | Restart-VMHostService out-Null
+
+}
+Write-Host "Done, NTP-Servers changed"

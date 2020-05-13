@@ -1,0 +1,160 @@
+
+<#
+.SYNOPSIS
+    Set scratch location 
+.DESCRIPTION
+    Set scratch location 
+.NOTES
+    File Name      : set_scratch_location.ps1
+    Author         : Trim Hajdari
+    Date           : 2018.04.12
+    Prerequisite   : vSphere 6.5, PowerShell v4+, powercli 6.3,
+    Copyright      : MIT
+    Version        : 0.1
+.LINK
+    Github		   : https://github.com/vtrimi/scripts/tree/master/VMware
+#>
+
+
+
+#----------------------------------------------------------------------------------------#
+#.\scratch.ps1 -vCenter lab-vc-01.lab.local -cluster  -datastore ISO -folder Scratch   #
+#----------------------------------------------------------------------------------------#
+
+
+#Collect the vCenter, Cluster and scratch_datastore
+Param([String]$vCenter, [String]$Cluster, [String]$Datastore, [String]$Folder)
+
+#Function to use multiple colors in one command
+function Write-Color([String[]]$Text, [ConsoleColor[]]$Color) {
+    for ($i = 0; $i -lt $Text.Length; $i++) {
+        Write-Host $Text[$i] -Foreground $Color[$i] -NoNewLine
+    }
+    Write-Host
+}
+
+#defining array variables
+$vmhost_array =@()
+$dir = @()
+$reboot_servers = @()
+
+#Validating input
+if (!$vCenter){
+	Write-Color  -Text "Please provide valid vCenter name using ","'-vCenter' ","option, exiting.." -Color Gray,Red,Gray
+	exit
+}
+
+if (!$Cluster){
+	Write-Color  -Text "Please provide valid cluster name using ","'-Cluster' ","option, exiting.." -Color Gray,Red,Gray
+	exit
+}
+
+if (!$Datastore){
+	Write-Color  -Text "Please provide valid Datastore name using ","'-Datastore' ","option, exiting.." -Color Gray,Red,Gray
+	exit
+}
+
+if (!$Folder){
+	Write-Color  -Text "Please provide valid scratch folder name using ","'-Folder' ","option, exiting.." -Color Gray,Red,Gray
+	exit
+}
+
+cls
+
+#Getting the path of the script
+$scriptPath = split-path -parent $MyInvocation.MyCommand.Definition
+
+#Collecting credentials for vCenter
+do {$user = Read-Host -Prompt 'Enter username for vCenter'
+$pass = Read-Host -AsSecureString -Prompt 'Enter password for vCenter'
+$cont = Read-Host -Prompt 'Type y to continue'}
+ while ($cont -ne 'y')
+$cred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $user, $pass
+
+#Connecting to vCenter server
+Write-Color -Text "`nConnecting to ", $vCenter -Color Gray, Red
+Connect-VIserver -Server $vCenter -Credential $cred | Out-Null
+
+#Validating connection to vCenter
+if(!$DefaultVIServers){
+  Write-Color -Text "`nConnection to ",$vCenter," failed, exiting.." -Color Yellow,Red,Yellow
+	exit
+} elseif($DefaultVIServer.name -ne $vCenter){
+    Write-Color -Text "Connected to wrong vCenter ", $DefaultVIServer.name ", exiting.." -Color Yellow,Red,Yellow
+  } else {
+  Write-Color -Text "Connection to vCenter ", $vCenter, " succeeded" -Color Green,Red,Green
+  Write-Host
+}
+
+
+#Getting the list of the ESXi hosts in the $Cluster
+$vmhost_array = get-cluster -name $cluster | Get-VMhost
+
+#Getting Scratch datastore UUID
+$ds_view = Get-View (Get-View (Get-VMHost -Name $vmhost_array[0]).ID).ConfigManager.StorageSystem
+	foreach ($vol in $ds_view.FileSystemVolumeInfo.MountInfo) {
+		if ($vol.Volume.Name -eq $datastore) {
+      $datastore_uuid =  $vol.Volume.Uuid
+    }
+}
+
+#Mounting datastore to be used as a scratch location
+New-PSDrive -Name "DS" -Root \ -PSProvider VimDatastore -Datastore (Get-VMHost -Name $vmhost_array[0] | Get-Datastore $datastore) | out-null
+Set-Location DS:\$folder
+
+#Collect the list of the folders
+$dir = dir
+
+#Check if the scratch folders exist for the ESXi hosts and create missing folders
+Foreach ($vmhost in $vmhost_array)
+{
+If ($dir.name -contains $vmhost.name){
+  Continue
+  }
+else{
+  Write-Color -Text "`n Creating scratch folder for ", $vmhost -Color Green,Red
+  mkdir $vmhost | out-null
+  }
+}
+
+#Check if the ESXi host is already configured with correct scratch location
+Foreach ($vmhost in $vmhost_array){
+	$row = '' | Select Server_Name
+	$configured_scratch = (Get-VMhost $vmhost | Get-AdvancedSetting -Name "ScratchConfig.ConfiguredScratchLocation").value
+	$current_scratch = (Get-VMhost $vmhost | Get-AdvancedSetting -Name "ScratchConfig.CurrentScratchLocation").value
+  $correct_scratch = "/vmfs/volumes/"+$datastore_uuid+"/"+$folder+"/"+$vmhost
+#	Write-Host "`n Correct scratch is" $correct_scratch
+# Write-Host "`n Configured Scratch on" $vmhost "is" $configured_scratch
+#	Write-Host "`n Current Scratch on" $vmhost "is" $current_scratch
+  If (($configured_scratch -eq $correct_scratch) -and ($current_scratch -eq $correct_scratch)) {
+    Write-Color -Text "`n ESXi host ", $vmhost, " was already configured with the correct scratch location" -Color Green,Red,Green
+  } elseif($configured_scratch -eq $correct_scratch) {
+	Write-Color -Text "`n The ESXi host", $vmhost, " was already configured correctly, `n but it hasn't been restared after the configuration change" -Color Yellow,Red,Yellow
+	$row.Server_Name = $vmhost.Name
+	$reboot_servers += $row
+	} else {
+    Get-VMhost $vmhost | Get-AdvancedSetting -Name "ScratchConfig.ConfiguredScratchLocation" |Set-AdvancedSetting -Value $correct_scratch -Confirm:$false |out-null
+    Write-Host -Fore:Red "`n ESXi host" $vmhost "is configured with the correct scratch location"
+		$row.Server_Name = $vmhost.Name
+		$reboot_servers += $row
+  }
+}
+
+#Provide output with the list of ESXi servers to be rebooted for the configration change to take effect
+Write-Host -Fore:Green "`n The configuration of the scratch location for ESXi servers in cluster" $cluster "is complete"
+Write-Host -Fore:Green "`n The following ESXi hosts have to be rebooted for the configuration change to take effect:"
+foreach ( $server in $reboot_servers ) {
+Write-Host -Fore:Red `n $server.Server_Name
+}
+
+#Exporting the list of ESXi hosts to be rebooted
+$exportfilename =  "Servers_to_reboot.csv"
+$exportfilepath = Join-Path -Path $scriptPath -ChildPath $exportFileName
+$reboot_servers | Export-Csv -Path $exportFilePath -NoTypeInformation -Force
+Write-Host "`n This list of these servers has also been exported to" $exportfilepath
+
+#Change location back to original
+Set-Location $scriptPath
+
+#Disconnecting from vCenter
+Disconnect-viserver -Confirm:$false

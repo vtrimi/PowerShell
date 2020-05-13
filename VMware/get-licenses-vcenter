@@ -1,0 +1,62 @@
+<#
+.SYNOPSIS
+    Export vCenter Licences
+.DESCRIPTION
+    Export vCenter Licences
+.NOTES
+    File Name      : get-licences-vcenter.ps1
+    Author         : Trim Hajdari
+    Date           : 2018.10.10
+    Prerequisite   : vSphere 6.5, PowerShell v4+, powercli 6.3,
+    Copyright      : MIT
+    Version        : 0.1
+.LINK
+    Github		   : https://github.com/vtrimi/scripts/tree/master/VMware
+#>
+$sw = [Diagnostics.Stopwatch]::StartNew()
+ 
+# Declare our list of vCenters
+[array]$vclistall = “adclzrhvcs001”
+ 
+# Ensure were not connected to any vcenters
+if ($DefaultVIServer.Count -gt 0) { Disconnect-VIServer * -Confirm:$false -ErrorAction SilentlyContinue -WarningAction SilentlyContinue -Force:$true > $null }
+ 
+[array]$report = $null
+ 
+Foreach ($ScriptVCInstance in $vclistall){
+    $connection = Connect-VIServer $ScriptVCInstance -ErrorAction SilentlyContinue
+ 
+    if ($connection) {
+        Write-host "Collecting License Assets on vCenter $($ScriptVCInstance)"
+ 
+        # Get the license manager assets
+        $LicenseManager= Get-view LicenseManager
+        $LicenseAssignmentManager= Get-View $LicenseManager.LicenseAssignmentManager
+        $licenses = $LicenseAssignmentManager.GetType().GetMethod("QueryAssignedLicenses").Invoke($LicenseAssignmentManager,@($null))
+ 
+        #Format the asset into an object
+        Foreach ($license in $Licenses) {
+            $object = New-Object -TypeName psobject
+            $object | Add-Member -MemberType NoteProperty -name "vCenter" -Value $($connection.name)
+            $object | Add-Member -MemberType NoteProperty -name "Entity" -value $($license.EntityDisplayName)
+            $object | Add-Member -MemberType NoteProperty -name "Display Name" -value  $($license.Properties | where{$_.Key -eq 'ProductName'} | select -ExpandProperty Value)
+            $object | Add-Member -MemberType NoteProperty -name "Product Version" -value $($License.Properties | where{$_.Key -eq 'FileVersion'} | select -ExpandProperty Value)
+            $object | Add-Member -MemberType NoteProperty -name "License" -value $($license.AssignedLicense.LicenseKey)
+            $object | Add-Member -MemberType NoteProperty -name "License Name" -value $($license.AssignedLicense.Name)
+            $object | Add-Member -MemberType NoteProperty -name "Cost Unit" -value $($license.Properties | where{$_.Key -eq 'CostUnit'} | select -ExpandProperty Value)
+            $object | Add-Member -MemberType NoteProperty -name "Used License" -Value $($license.Properties | where{$_.Key -eq 'EntityCost'} | select -ExpandProperty Value)
+            $object | Add-Member -MemberType NoteProperty -name "Total Licenses" -value $($license.AssignedLicense.Total)
+            $report += $object
+            if ($DefaultVIServer.Count -gt 0) { Disconnect-VIServer * -Confirm:$false -ErrorAction SilentlyContinue -WarningAction SilentlyContinue -Force:$true > $null }
+        } #end foreach $license
+    } Else { # Else for if $connection
+        Write-warning "Not connected to vCenter $($ScriptVCInstance)"
+    } # endif $connection
+} # End foreach $ScriptVCInstance
+ 
+# write-out as a CSV file
+Write-host "Exporting CSV Licensed-Assets"
+$report | Sort-object "vCenter","License","Entity" | Export-csv "D:\_Administrator\_Scripts\VMware\Licensed-Assets.csv" -NoTypeInformation -UseCulture
+ 
+$sw.Stop()
+$sw.Elapsed

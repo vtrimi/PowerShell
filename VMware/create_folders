@@ -1,0 +1,44 @@
+# Set datacenter
+ 
+$datacenter = "DC_UCP_CI"
+ 
+# Create top level folders
+ 
+$location = Get-Datacenter -Name $datacenter | Get-Folder -Name "vm"
+$folders = 
+"UCP-CI-Management",
+"Templates",
+"Automation",
+"Backup",
+"SQL"
+ 
+foreach ($folder in $folders) {
+    New-Folder -Name $folder -Location $location
+    }
+
+# Create sub-folders Management
+ 
+$location_management = Get-Datacenter -Name $datacenter | Get-Folder -Name "UCP-CI-Management"
+$management_folders = 
+"vROps",
+"vRO",
+"vRLI",
+"vRA",
+"NSX",
+"SRM",
+"Horizion",
+"vRep"
+foreach ($folder in $management_folders) {
+    New-Folder -Name $folder -Location $location_management
+    }
+
+# Create sub-folders Templates
+
+$location_templates = Get-Datacenter -Name $datacenter | Get-Folder -Name "Templates"
+$templates_folders = 
+"Windows",
+"Linux"
+foreach ($folder in $templates_folders) {
+    New-Folder -Name $folder -Location $location_templates
+    }
+   

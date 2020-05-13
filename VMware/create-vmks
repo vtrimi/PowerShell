@@ -1,0 +1,5 @@
+Import-Csv C:\Users\Administrator\Desktop\scripts\vmk_vmo.csv -UseCulture | %{
+
+    $myVMHost = Get-VMHost -Name $_.VMHost
+    $myVDSwitch = Get-VDSwitch -Name $_.Switch
+    New-VMHostNetworkAdapter -VMHost $myVMHost -VirtualSwitch $myVDSwitch -PortGroup $_.VDPortgroup -IP $_.IP -SubnetMask $_.Mask -Mtu 9000 -VMotionEnabled:$true
