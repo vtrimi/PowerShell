@@ -1,0 +1,8 @@
+#Get Cluster VMHBA
+Get-Cluster ADCCZRHMGT001 | Get-VMhost | Get-VMHostHBA -Type FibreChannel | Select VMHost,Device,@{N="WWN";E={"{0:X}" -f $_.PortWorldWideName}} | Sort VMhost,Device
+
+#Get all Cluster VMHBA
+Get-Cluster | Get-VMhost | Get-VMHostHBA -Type FibreChannel | where {$_.Status -eq "online"} | Select @{N="Cluster";E={$cluster}},VMHost,Device,Status,@{N="WWPN";E={"{0:X}"-f$_.PortWorldWideName}} 
+
+#Get all Cluster VMHBA List (online)
+Get-Cluster ADCCZRHMGT001 | Get-VMhost | Get-VMHostHBA -Type FibreChannel | where {$_.Status -eq "online"} | Select VMHost,Device,@{N="WWN";E={"{0:X}" -f $_.PortWorldWideName}} | Sort VMhost,Device
