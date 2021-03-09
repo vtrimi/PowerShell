@@ -1,0 +1,62 @@
+
+<#
+.SYNOPSIS
+    Get all  VMAverageUsage
+.DESCRIPTION
+    Get all VM Metrics vCPU, RAM, DISK
+.NOTES
+    File Name      : Get-localusersesxi.ps1
+    Author         : Trim Hajdari
+    Date           : 2021.03.08
+    Prerequisite   : vSphere 6.5, PowerShell v4+, powercli 10
+    Copyright      : MIT
+    Version        : 0.1
+    DiskIOPS       : need to be less then 8 days (1day max)
+.LINK
+    Github		   : https://github.com/vtrimi/powershell/tree/master/VMware
+#>
+
+$report = @()
+$metrics = "cpu.usagemhz.average","mem.usage.average","net.usage.average","disk.usage.average","disk.read.average","disk.write.average"
+$vms = Get-Vm
+$start = (get-date).AddDays(-8)
+Get-Stat -Entity ($vms) -start $start -stat $metrics |
+
+Group-Object -Property {$_.Timestamp.Month} | %{
+
+    $row = ""| Select VmName, Month, vCPU, MinCpu,AvgCpu,MaxCpu,MemAlloc,MinMem,AvgMem,MaxMem,MinNet,AvgNet,MaxNet,MinDiskall,AvgDiskall,MaxDiskall, rdMinDisk, rdAvgDisk, rdMaxDisk, wrMinDisk, wrAvgDisk, wrMaxDisk
+    $row.Month = (Get-Culture).DateTimeFormat.GetMonthName($_.Name)
+    $row.VmName = $_.Group[0].Entity.Name
+    $row.vCPU = $_.Group[0].Entity.NumCpu
+    $cpuStat = $_.Group | where {$_.MetricId -eq "cpu.usagemhz.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.MinCpu = "{0:f2}" -f ($cpuStat.Minimum)
+    $row.AvgCpu = "{0:f2}" -f ($cpuStat.Average)
+    $row.MaxCpu = "{0:f2}" -f ($cpuStat.Maximum)
+    $row.MemAlloc = $_.Group[0].Entity.MemoryMB
+    $memStat = $_.Group | where {$_.MetricId -eq "mem.usage.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.MinMem = "{0:f2}" -f ($memStat.Minimum)
+    $row.AvgMem = "{0:f2}" -f ($memStat.Average)
+    $row.MaxMem = "{0:f2}" -f ($memStat.Maximum)
+    $netStat = $_.Group | where {$_.MetricId -eq "net.usage.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.MinNet = "{0:f2}" -f ($netStat.Minimum)
+    $row.AvgNet = "{0:f2}" -f ($netStat.Average)
+    $row.MaxNet = "{0:f2}" -f ($netStat.Maximum)
+    $diskStatall = $_.Group | where {$_.MetricId -eq "disk.usage.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.MinDiskall = "{0:f2}" -f ($diskStatall.Minimum)
+    $row.AvgDiskall = "{0:f2}" -f ($diskStatall.Average)
+    $row.MaxDiskall = "{0:f2}" -f ($diskStatall.Maximum)
+
+    $rediskStat = $_.Group | where {$_.MetricId -eq "disk.read.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.rdMinDisk = "{0:f2}" -f ($rediskStat.Minimum)
+    $row.rdAvgDisk = "{0:f2}" -f ($rediskStat.Average)
+    $row.rdMaxDisk = "{0:f2}" -f ($rediskStat.Maximum)
+
+    $wrdiskStat = $_.Group | where {$_.MetricId -eq "disk.write.average"} | Measure-Object -Property Value -Minimum -Maximum -Average
+    $row.wrMinDisk = "{0:f2}" -f ($wrdiskStat.Minimum)
+    $row.wrAvgDisk = "{0:f2}" -f ($wrdiskStat.Average)
+    $row.wrMaxDisk = "{0:f2}" -f ($wrdiskStat.Maximum)
+    
+    $report += $row
+}
+
+$report | Export-Csv "C:\Temp\AverageUsage1.csv" -NoTypeInformation -UseCulture
