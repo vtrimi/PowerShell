@@ -18,7 +18,7 @@
 
 $report = @()
 $metrics = "cpu.usagemhz.average","mem.usage.average","net.usage.average","disk.usage.average","disk.read.average","disk.write.average"
-$vms = Get-Vm
+$vms = Get-Vm |Where-object {$_.powerstate -eq "poweredon"}
 $start = (get-date).AddDays(-8)
 Get-Stat -Entity ($vms) -start $start -stat $metrics |
 
