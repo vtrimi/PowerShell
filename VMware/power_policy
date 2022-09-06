@@ -1,0 +1,12 @@
+$view = (Get-VMHost  | Get-View)
+(Get-View $view.ConfigManager.PowerSystem).ConfigurePowerPolicy(1)
+
+--------------------------
+
+(Get-View (Get-VMHost | Get-View).ConfigManager.PowerSystem).ConfigurePowerPolicy(1)
+
+-----------------
+
+1=HighPerformance
+2=Balanced
+3=LowPower
