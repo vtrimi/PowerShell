@@ -1,5 +1,4 @@
-re
-
+rename the local datastore 
 
 $datastoreNames = get-datastore datastore1*
 foreach ($Datastore in $datastoreNames){
