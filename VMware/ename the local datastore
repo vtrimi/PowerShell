@@ -1,0 +1,11 @@
+re
+
+
+$datastoreNames = get-datastore datastore1*
+foreach ($Datastore in $datastoreNames){
+    write-host $Datastore.name "- " -NoNewline 
+    $VMhostFQDN = (get-vmhost -id $(get-datastore $datastore).ExtensionData.host.key).name
+    $VMhostname = $VMhostFQDN.Split(".")[0]
+    $datastorenewname = $VMhostname + "-localstorage"
+    Get-datastore -name $datastore | Set-datastore -Name $datastorenewname
+}
